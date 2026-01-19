@@ -8,7 +8,9 @@
  * @module
  */
 
-import type * as messages from "../messages.js";
+import type * as dashboard from "../dashboard.js";
+import type * as projects from "../projects.js";
+import type * as vulnerabilities from "../vulnerabilities.js";
 
 import type {
   ApiFromModules,
@@ -17,7 +19,9 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
-  messages: typeof messages;
+  dashboard: typeof dashboard;
+  projects: typeof projects;
+  vulnerabilities: typeof vulnerabilities;
 }>;
 
 /**
