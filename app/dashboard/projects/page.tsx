@@ -107,7 +107,7 @@ export default function ProjectsListPage() {
   if (!isLoaded || projects === undefined) {
     return (
       <div className="flex h-[50vh] w-full items-center justify-center">
-        <TableSkeleton className="h-8 w-8 animate-spin text-emerald-500" />
+        <TableSkeleton />
       </div>
     );
   }
