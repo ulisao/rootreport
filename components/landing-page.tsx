@@ -293,7 +293,7 @@ export function LandingPage() {
                   Para profesionales serios
                 </CardDescription>
                 <div className="mt-4">
-                  <span className="text-4xl font-bold text-zinc-100">$30</span>
+                  <span className="text-4xl font-bold text-zinc-100">$49.000 ARS</span>
                   <span className="text-zinc-400">/mes</span>
                 </div>
               </CardHeader>

@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { useOrganization, useUser } from "@clerk/nextjs";
+import { useOrganization, useUser } from "@clerk/nextjs"; // <--- Solo estos hooks
 import {
   FolderKanban,
   Plus,
@@ -42,10 +43,15 @@ import {
 export default function ProjectsListPage() {
   const { organization, isLoaded } = useOrganization();
   const { user } = useUser();
+  const router = useRouter();
 
-  // 1. DETECTAR SI ES PRO (Igual que en Settings)
-  // Usamos "enterprise" porque así lo configuramos en Clerk
-  const isPro = (user?.publicMetadata as { plan?: string })?.plan === "enterprise";
+  // 1. LÓGICA MANUAL DE METADATA (MERCADO PAGO)
+  // Verificamos si en la metadata del usuario o de la organización dice "enterprise"
+  // Esto es lo que va a actualizar nuestro Webhook de Mercado Pago
+  const orgMetadata = organization?.publicMetadata as { plan?: string };
+  const userMetadata = user?.publicMetadata as { plan?: string };
+  
+  const isPro = orgMetadata?.plan === "enterprise" || userMetadata?.plan === "enterprise";
 
   const orgId = organization?.id || user?.id;
 
@@ -60,39 +66,40 @@ export default function ProjectsListPage() {
   const [isCreating, setIsCreating] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
- const handleCreate = async (e: React.FormEvent) => {
-  e.preventDefault();
-  if (!newProjectName || !orgId) return;
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newProjectName || !orgId) return;
 
-  setIsCreating(true);
-  try {
-    await createProject({ name: newProjectName, orgId, status: "active" });
-    setNewProjectName("");
-    setIsDialogOpen(false);
+    setIsCreating(true);
+    try {
+      await createProject({ name: newProjectName, orgId, status: "active" });
+      setNewProjectName("");
+      setIsDialogOpen(false);
 
-    // ÉXITO BONITO
-    toast.success("Proyecto creado correctamente", {
-      description: `"${newProjectName}" ya está listo para auditar.`
-    })
-
-  } catch (error: any) {
-    if (error.data?.code === "LIMIT_REACHED") {
-      // ERROR DE LÍMITE
-      toast.error("Límite de proyectos alcanzado", {
-        description: "Actualiza a PRO para crear más auditorías.",
-        action: {
-          label: "Ver Planes",
-          onClick: () => console.log("Ir a billing") // O redirigir a /settings
-        },
+      // ÉXITO BONITO
+      toast.success("Proyecto creado correctamente", {
+        description: `"${newProjectName}" ya está listo para auditar.`
       })
-    } else {
-      toast.error("Ocurrió un error inesperado")
-      console.error(error);
+
+    } catch (error: any) {
+      if (error.data?.code === "LIMIT_REACHED") {
+        // ERROR DE LÍMITE
+        toast.error("Límite de proyectos alcanzado", {
+          description: "Actualiza a PRO para crear más auditorías.",
+          action: {
+            label: "Ver Planes",
+            // Redirigimos a settings donde está el botón de Mercado Pago
+            onClick: () => router.push("/dashboard/settings") 
+          },
+        })
+      } else {
+        toast.error("Ocurrió un error inesperado")
+        console.error(error);
+      }
+    } finally {
+      setIsCreating(false);
     }
-  } finally {
-    setIsCreating(false);
-  }
-};
+  };
 
   const getStatusColor = (status: string) => {
     return status === "active"
@@ -115,7 +122,7 @@ export default function ProjectsListPage() {
   // Lógica visual para la barra de progreso
   const maxProjects = isPro ? "∞" : 3;
   const projectCount = projects.length;
-  // Si es Pro, la barra está siempre al 100% (o 0% según prefieras), si es Free calcula el porcentaje
+  // Si es Pro, la barra está siempre al 100%
   const progressValue = isPro ? 100 : (projectCount / 3) * 100;
 
   return (
@@ -193,7 +200,6 @@ export default function ProjectsListPage() {
 
             <Progress
               value={progressValue}
-              // Cambiamos el color de la barra si es Pro
               className={`h-2 bg-zinc-800 ${isPro ? "[&>div]:bg-emerald-500" : ""}`}
             />
 
@@ -213,7 +219,7 @@ export default function ProjectsListPage() {
                     variant="outline"
                     size="sm"
                     className="border-emerald-600 text-emerald-500 hover:bg-emerald-600 hover:text-white transition-colors"
-                    onClick={() => alert("Ir a Stripe...")}
+                    onClick={() => router.push("/dashboard/settings")} // Redirige al botón de MP
                   >
                     <Zap className="w-3 h-3 mr-2" />
                     Pasar a PRO

@@ -1,198 +1,196 @@
-"use client"
+"use client";
 
-import { useOrganization, useUser, OrganizationProfile } from "@clerk/nextjs"
-import { useQuery } from "convex/react"
-import { api } from "@/convex/_generated/api"
-import { 
-  CreditCard, 
-  Users, 
-  Check, 
-  Loader2, 
-  Zap,
-  ExternalLink
-} from "lucide-react"
-
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Progress } from "@/components/ui/progress"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Check, Loader2, Zap, Crown } from "lucide-react";
+import { useOrganization, useUser } from "@clerk/nextjs";
 
 export function SettingsView() {
-  const { organization, isLoaded: isOrgLoaded } = useOrganization()
-  const { user, isLoaded: isUserLoaded } = useUser()
-  
-  // Detectar si es PRO mirando los metadatos (Igual que el backend)
-  const isPro = (user?.publicMetadata as { plan?: string })?.plan === "enterprise"
+  const [loading, setLoading] = useState(false);
+  const { organization } = useOrganization();
+  const { user } = useUser();
 
-  // Traemos los proyectos reales
-  const projects = useQuery(api.projects.getProjects, organization?.id ? { orgId: organization.id } : "skip")
-  
-  // Calculamos uso real
-  const projectUsage = projects?.length || 0
-  const maxProjects = isPro ? "∞" : 3 // Infinito si es pro
-  
-  // Cálculo de porcentaje para la barra (si es infinito ponemos 100% o algo visual)
-  const usagePercentage = isPro 
-    ? 100 // Barra llena pero verde si es pro
-    : Math.min((projectUsage / 3) * 100, 100)
+  // Lógica de detección de plan (igual que en Projects)
+  const orgMetadata = organization?.publicMetadata as { plan?: string };
+  const userMetadata = user?.publicMetadata as { plan?: string };
+  const isPro = orgMetadata?.plan === "enterprise" || userMetadata?.plan === "enterprise";
 
-  const handleUpgrade = () => {
-    // AQUÍ IRÍA LA REDIRECCIÓN A STRIPE
-    // window.location.href = "https://buy.stripe.com/..."
-    
-    // Por ahora, simulamos o avisamos
-    alert("🔗 Redirigiendo a pasarela de pago (Simulación)...\n\nPara probar PRO en dev, edita los metadatos en Clerk Dashboard.")
-  }
+  const handleUpgrade = async () => {
+    setLoading(true);
+    try {
+      // Llamamos a nuestra API para crear el link de suscripción
+      const res = await fetch("/api/checkout", { method: "POST" });
+      const data = await res.json();
+      if (data.url) {
+        // Redirigimos a Mercado Pago
+        window.location.href = data.url;
+      } else {
+        throw new Error("No se recibió la URL de pago");
+      }
+    } catch (error) {
+      console.error(error);
+      alert("Error al iniciar el pago. Por favor, intenta nuevamente.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const handleManageSubscription = () => {
-    alert("🔗 Abriendo portal de cliente de Stripe...")
-  }
-
-  if (!isOrgLoaded || !isUserLoaded) {
-    return <div className="p-8 flex justify-center"><Loader2 className="animate-spin text-emerald-500" /></div>
-  }
+  const contactEmail = "ventas@rootreport.com"; // Cambia esto por tu email real
 
   return (
-    <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-zinc-100">Configuración</h1>
-        <p className="text-zinc-400 mt-1">Gestiona tu equipo, facturación y preferencias.</p>
-      </div>
+    <div className="p-6 h-full overflow-y-auto">
+      <div className="max-w-6xl mx-auto">
+        <div className="mb-8">
+          <h2 className="text-2xl font-bold text-zinc-100">Planes y Facturación</h2>
+          <p className="text-zinc-400">Gestiona tu suscripción y límites.</p>
+        </div>
 
-      <Tabs defaultValue="team" className="space-y-6">
-        <TabsList className="bg-zinc-900 border border-zinc-800">
-          <TabsTrigger value="team">
-            <Users className="h-4 w-4 mr-2" />
-            Equipo y Organización
-          </TabsTrigger>
-          <TabsTrigger value="billing">
-            <CreditCard className="h-4 w-4 mr-2" />
-            Facturación
-          </TabsTrigger>
-        </TabsList>
-
-        {/* TAB 1: EQUIPO */}
-        <TabsContent value="team" className="space-y-6">
-            <div className="rounded-lg overflow-hidden border border-zinc-800 bg-zinc-900">
-                <OrganizationProfile 
-                    routing="hash"
-                    appearance={{
-                        elements: {
-                            rootBox: "w-full h-full",
-                            card: "w-full h-full shadow-none border-0 bg-transparent text-zinc-100",
-                            navbar: "hidden",
-                            headerTitle: "hidden",
-                            headerSubtitle: "hidden",
-                            formButtonPrimary: "bg-emerald-600 hover:bg-emerald-700",
-                            formFieldInput: "bg-zinc-950 border-zinc-800 text-zinc-100",
-                            userPreviewMainIdentifier: "text-zinc-200 font-semibold",
-                            userPreviewSecondaryIdentifier: "text-zinc-400",
-                            organizationPreviewMainIdentifier: "text-zinc-200",
-                        }
-                    }}
-                />
-            </div>
-        </TabsContent>
-
-        {/* TAB 2: BILLING */}
-        <TabsContent value="billing" className="space-y-6">
-          {/* Tarjeta de Estado del Plan */}
-          <Card className={`bg-zinc-900 border ${isPro ? "border-emerald-500/50" : "border-zinc-800"}`}>
+        {/* Grilla de 3 Columnas */}
+        <div className="grid md:grid-cols-3 gap-8 items-start">
+          
+          {/* PLAN FREE */}
+          <Card className={`bg-zinc-900 border-zinc-800 h-full flex flex-col ${!isPro ? "border-emerald-500/50 ring-1 ring-emerald-500/20" : ""}`}>
             <CardHeader>
-              <CardTitle className="text-zinc-100">Plan Actual</CardTitle>
-              <CardDescription className="text-zinc-500">Estado de tu suscripción</CardDescription>
+              <CardTitle className="text-zinc-100 flex justify-between items-center">
+                Freelancer
+                {!isPro && <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-400">Plan Actual</Badge>}
+              </CardTitle>
+              <CardDescription className="text-zinc-400">
+                Para empezar a auditar.
+              </CardDescription>
+              <div className="mt-4">
+                <span className="text-4xl font-bold text-zinc-100">Gratis</span>
+              </div>
             </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="flex items-center justify-between p-4 bg-zinc-950 border border-zinc-800 rounded-lg">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-lg font-semibold text-zinc-100">
-                        {isPro ? "Plan Agency (Premium)" : "Plan Freelancer (Gratis)"}
-                    </h3>
-                    <Badge variant="outline" className="text-emerald-400 border-emerald-500/20 bg-emerald-500/10">Activo</Badge>
-                  </div>
-                  <p className="text-sm text-zinc-500 mt-1">
-                    {isPro ? "Facturación mensual de $30" : "Gratis para siempre • Hasta 3 proyectos"}
-                  </p>
-                </div>
-                {isPro && (
-                    <Button variant="ghost" onClick={handleManageSubscription} className="text-zinc-400 hover:text-white">
-                        Gestionar <ExternalLink className="ml-2 h-4 w-4" />
-                    </Button>
+            <CardContent className="flex-1">
+              <ul className="space-y-3">
+                {["3 Proyectos Activos", "Reportes PDF Básicos", "Soporte Comunitario"].map(
+                  (feature) => (
+                    <li key={feature} className="flex items-center gap-3 text-sm text-zinc-400">
+                      <Check className="h-4 w-4 text-emerald-500 shrink-0" />
+                      {feature}
+                    </li>
+                  )
                 )}
-              </div>
-
-              {/* Uso Real de Proyectos */}
-              <div className="space-y-4">
-                <h4 className="font-medium text-zinc-100">Uso de Recursos</h4>
-                <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm text-zinc-400">Proyectos Activos</span>
-                      <span className="text-sm text-zinc-100">{projectUsage} / {maxProjects}</span>
-                    </div>
-                    <Progress value={usagePercentage} className="h-2 bg-zinc-800" />
-                    {!isPro && projectUsage >= 3 && (
-                        <p className="text-xs text-red-400 mt-2">Has alcanzado el límite gratuito.</p>
-                    )}
-                </div>
-              </div>
+              </ul>
             </CardContent>
+            <CardFooter>
+              <Button variant="outline" disabled className="w-full border-zinc-700 text-zinc-500 bg-transparent cursor-not-allowed">
+                {isPro ? "Incluido en Pro" : "Plan Actual"}
+              </Button>
+            </CardFooter>
           </Card>
 
-          {/* Comparativa de Planes */}
-          <Card className="bg-zinc-900 border-zinc-800">
+          {/* PLAN PRO (Destacado con botón de pago) */}
+          <Card className={`bg-zinc-900 border-zinc-800 relative overflow-visible shadow-xl shadow-emerald-900/10 md:scale-105 z-10 h-full flex flex-col ${isPro ? "border-emerald-500 ring-1 ring-emerald-500/50" : ""}`}>
+            {!isPro && (
+              <div className="absolute -top-4 left-1/2 -translate-x-1/2 w-max">
+                <span className="bg-emerald-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg">
+                  Recomendado
+                </span>
+              </div>
+            )}
             <CardHeader>
-              <CardTitle className="text-zinc-100">Planes Disponibles</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid md:grid-cols-2 gap-4">
-                {/* Freelancer */}
-                <div className={`p-4 border rounded-lg ${!isPro ? "border-emerald-500/20 bg-emerald-500/5" : "border-zinc-800 opacity-50"}`}>
-                    <div className="flex justify-between">
-                        <h4 className="font-medium text-zinc-100">Freelancer</h4>
-                        {!isPro && <Badge className="bg-emerald-600">Tu Plan</Badge>}
-                    </div>
-                    <p className="text-2xl font-bold text-zinc-100 mt-2">Gratis</p>
-                    <ul className="mt-4 space-y-2">
-                        <li className="flex items-center gap-2 text-sm text-zinc-400"><Check className="h-4 w-4 text-emerald-500" />3 proyectos</li>
-                        <li className="flex items-center gap-2 text-sm text-zinc-400"><Check className="h-4 w-4 text-emerald-500" />Reportes PDF</li>
-                    </ul>
-                </div>
-
-                {/* Agency Pro */}
-                <div className={`p-4 border rounded-lg transition-colors ${isPro ? "border-emerald-500/50 bg-emerald-500/5" : "border-zinc-800 hover:border-emerald-500/30"}`}>
-                  <div className="flex justify-between">
-                        <h4 className="font-medium text-zinc-100">Agency Pro</h4>
-                        {isPro && <Badge className="bg-emerald-600">Tu Plan</Badge>}
-                  </div>
-                  <p className="text-2xl font-bold text-zinc-100 mt-2">
-                    $30<span className="text-sm font-normal text-zinc-500">/mes</span>
-                  </p>
-                  <ul className="mt-4 space-y-2">
-                    <li className="flex items-center gap-2 text-sm text-zinc-400">
-                      <Check className="h-4 w-4 text-emerald-500" />
-                      Proyectos <strong>Ilimitados</strong>
-                    </li>
-                    <li className="flex items-center gap-2 text-sm text-zinc-400">
-                      <Check className="h-4 w-4 text-emerald-500" />
-                      Soporte Prioritario
-                    </li>
-                  </ul>
-                  
-                  {!isPro ? (
-                      <Button onClick={handleUpgrade} className="w-full mt-4 bg-emerald-600 hover:bg-emerald-700 text-white">
-                        <Zap className="mr-2 h-4 w-4" /> Actualizar a PRO
-                      </Button>
-                  ) : (
-                      <Button disabled className="w-full mt-4 bg-zinc-800 text-zinc-400">Plan Actual</Button>
-                  )}
-                </div>
+              <CardTitle className="text-zinc-100 flex justify-between items-center">
+                Agency Pro
+                {isPro && <Badge className="bg-emerald-500 text-white hover:bg-emerald-600"><Crown className="w-3 h-3 mr-1"/> Activo</Badge>}
+              </CardTitle>
+              <CardDescription className="text-zinc-400">
+                Para profesionales serios.
+              </CardDescription>
+              <div className="mt-4">
+                <span className="text-4xl font-bold text-zinc-100">$49.000</span>
+                <span className="text-zinc-400 ml-2">ARS/mes</span>
               </div>
+            </CardHeader>
+            <CardContent className="flex-1">
+              <ul className="space-y-3">
+                {[
+                  "Proyectos Ilimitados",
+                  "Reportes Personalizados",
+                  "Soporte Prioritario",
+                  "Colaboración en Equipo",
+                ].map((feature) => (
+                  <li key={feature} className="flex items-center gap-3 text-sm text-zinc-400">
+                    <Check className="h-4 w-4 text-emerald-500 shrink-0" />
+                    {feature}
+                  </li>
+                ))}
+              </ul>
             </CardContent>
+            <CardFooter>
+              {isPro ? (
+                <Button disabled className="w-full bg-zinc-800 text-emerald-500 font-medium cursor-not-allowed">
+                    <Check className="mr-2 h-4 w-4" /> Suscripción Activa
+                </Button>
+              ) : (
+                <Button
+                  onClick={handleUpgrade}
+                  disabled={loading}
+                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-900/20 h-12 text-base"
+                >
+                  {loading ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : <Zap className="mr-2 h-5 w-5" />}
+                  Actualizar a Pro
+                </Button>
+              )}
+            </CardFooter>
           </Card>
-        </TabsContent>
-      </Tabs>
+
+          {/* PLAN ENTERPRISE */}
+          <Card className="bg-zinc-900 border-zinc-800 h-full flex flex-col">
+            <CardHeader>
+              <CardTitle className="text-zinc-100">Enterprise</CardTitle>
+              <CardDescription className="text-zinc-400">
+                Para grandes equipos.
+              </CardDescription>
+              <div className="mt-4">
+                <span className="text-4xl font-bold text-zinc-100">Custom</span>
+              </div>
+            </CardHeader>
+            <CardContent className="flex-1">
+              <ul className="space-y-3">
+                {[
+                  "Todo lo de Pro",
+                  "SSO & SAML",
+                  "Contrato de SLA",
+                  "Instancia Privada (On-prem)",
+                ].map((feature) => (
+                  <li key={feature} className="flex items-center gap-3 text-sm text-zinc-400">
+                    <Check className="h-4 w-4 text-emerald-500 shrink-0" />
+                    {feature}
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+            <CardFooter>
+              <a href={`mailto:${contactEmail}`} className="w-full">
+                <Button
+                  variant="outline"
+                  className="w-full border-zinc-700 text-zinc-300 hover:bg-zinc-800 bg-transparent"
+                >
+                  Contactar Ventas
+                </Button>
+              </a>
+            </CardFooter>
+          </Card>
+
+        </div>
+        
+        {isPro && (
+          <p className="text-center text-zinc-500 text-sm mt-8">
+            Para cancelar tu suscripción, contacta a soporte o gestiona tus pagos en Mercado Pago.
+          </p>
+        )}
+      </div>
     </div>
-  )
+  );
 }
