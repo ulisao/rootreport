@@ -1,6 +1,17 @@
 import { mutation, query } from "./_generated/server";
 import { v, ConvexError } from "convex/values"; // Import único y consolidado
 
+async function checkSubscription(ctx: any, orgId: string) {
+  const sub = await ctx.db
+    .query("subscriptions")
+    .withIndex("by_orgId", (q: any) => q.eq("orgId", orgId))
+    .first();
+
+  // Es PRO si existe, el plan es pro/enterprise y el status es active
+  const isPro = sub && (sub.plan === "pro" || sub.plan === "enterprise") && sub.status === "active";
+  return isPro;
+}
+
 export const createProject = mutation({
   args: {
     name: v.string(),
@@ -16,17 +27,11 @@ export const createProject = mutation({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("No autorizado");
 
-    // --- DEBUGGING (Mirá tu terminal donde corre npx convex dev) ---
-    console.log("Usuario intentando crear:", identity.email);
-    console.log("Metadata recibida:", identity.publicMetadata);
-    // -------------------------------------------------------------
+    // 1. CHEQUEO DE SUSCRIPCIÓN (NUEVO)
+    // Consultamos nuestra propia DB, no Clerk.
+    const isPro = await checkSubscription(ctx, args.orgId);
 
-    // Type casting seguro
-    const metadata = identity.publicMetadata as { plan?: string };
-    const isPro = metadata?.plan === "enterprise";
-
-    console.log("¿Es Pro?", isPro); // Debug
-
+    // 2. CONTAR PROYECTOS EXISTENTES
     const projects = await ctx.db
       .query("projects")
       .withIndex("by_orgId", (q) => q.eq("orgId", args.orgId))
@@ -34,13 +39,15 @@ export const createProject = mutation({
 
     const FREE_LIMIT = 3;
 
+    // 3. APLICAR CANDADO
     if (!isPro && projects.length >= FREE_LIMIT) {
       throw new ConvexError({
-        message: `Has alcanzado el límite de ${FREE_LIMIT} proyectos gratuitos.`,
+        message: `Has alcanzado el límite de ${FREE_LIMIT} proyectos gratuitos. Actualiza a PRO para continuar.`,
         code: "LIMIT_REACHED"
       });
     }
 
+    // 4. CREAR SI PASÓ EL CONTROL
     const projectId = await ctx.db.insert("projects", {
       name: args.name,
       description: args.description,

@@ -9,7 +9,9 @@
  */
 
 import type * as dashboard from "../dashboard.js";
+import type * as library from "../library.js";
 import type * as projects from "../projects.js";
+import type * as subscriptions from "../subscriptions.js";
 import type * as vulnerabilities from "../vulnerabilities.js";
 
 import type {
@@ -20,7 +22,9 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   dashboard: typeof dashboard;
+  library: typeof library;
   projects: typeof projects;
+  subscriptions: typeof subscriptions;
   vulnerabilities: typeof vulnerabilities;
 }>;
 

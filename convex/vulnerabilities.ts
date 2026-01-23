@@ -1,19 +1,30 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 
-// 1. Listar vulnerabilidades de un proyecto específico
+// 1. Listar vulnerabilidades de un proyecto (CON URLs DE IMÁGENES)
 export const getFindings = query({
   args: { projectId: v.id("projects") },
   handler: async (ctx, args) => {
-    // Verificamos identidad (opcionalmente podrías chequear si pertenece a la org)
+    // Verificamos identidad
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return [];
 
-    return await ctx.db
+    const findings = await ctx.db
       .query("vulnerabilities")
       .withIndex("by_projectId", (q) => q.eq("projectId", args.projectId))
-      .order("desc") // Las más nuevas primero
+      .order("desc") 
       .collect();
+
+    // TRANSFORMACIÓN MÁGICA: Convertimos IDs -> URLs
+    return await Promise.all(
+      findings.map(async (f) => ({
+        ...f,
+        // Si tiene imágenes, pedimos las URLs firmadas a Convex Storage
+        imageUrls: f.images 
+          ? await Promise.all(f.images.map((id) => ctx.storage.getUrl(id)))
+          : []
+      }))
+    );
   },
 });
 
@@ -30,17 +41,32 @@ export const createFinding = mutation({
       v.literal("low"),
       v.literal("info")
     ),
+    status: v.optional(v.union(v.literal("open"), v.literal("confirmed"), v.literal("mitigated"), v.literal("accepted_risk"), v.literal("closed"))),
+    remediation: v.optional(v.string()),
     description: v.string(),
-    // status y remediation los manejamos con defaults o opcionales
+    cvssScore: v.optional(v.number()),
+    cvssVector: v.optional(v.string()),
+    // Agregamos soporte para imágenes desde la creación
+    images: v.optional(v.array(v.string())), 
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("No autorizado");
 
+    const project = await ctx.db.get(args.projectId);
+    if (!project) throw new Error("Project not found");
+
     await ctx.db.insert("vulnerabilities", {
-      ...args,
-      status: "open", // Siempre nacen abiertas
-      remediation: "",
+      title: args.title,
+      description: args.description,
+      severity: args.severity,
+      status: args.status ?? "open",
+      remediation: args.remediation,
+      projectId: args.projectId,
+      orgId: project.orgId,
+      cvssScore: args.cvssScore,
+      cvssVector: args.cvssVector,
+      images: args.images ?? [], // Guardamos el array o vacío
     });
   },
 });
@@ -49,7 +75,6 @@ export const createFinding = mutation({
 export const updateFinding = mutation({
   args: {
     id: v.id("vulnerabilities"),
-    // CORRECCIÓN: Usamos v.union para limitar las opciones igual que en el schema
     title: v.optional(v.string()),
     severity: v.optional(v.union(
       v.literal("critical"),
@@ -58,22 +83,27 @@ export const updateFinding = mutation({
       v.literal("low"),
       v.literal("info")
     )),
-    status: v.optional(v.union(
-      v.literal("open"), 
-      v.literal("in_review"), 
-      v.literal("resolved")
-    )),
+    status: v.optional(v.union(v.literal("open"), v.literal("confirmed"), v.literal("mitigated"), v.literal("accepted_risk"), v.literal("closed"))),
     description: v.optional(v.string()),
     remediation: v.optional(v.string()),
+    cvssScore: v.optional(v.number()),
+    cvssVector: v.optional(v.string()),
+    // Array de IDs de Storage
+    images: v.optional(v.array(v.string())), 
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("No autorizado");
 
-    // Extraemos el ID para no pasárselo al patch
+    const isPro = false; // Asumimos que todos son Free por ahora
+    const FREE_IMAGE_LIMIT = 2;
+
+    if (!isPro && args.images && args.images.length > FREE_IMAGE_LIMIT) {
+        throw new Error(`El plan gratuito solo permite hasta ${FREE_IMAGE_LIMIT} imágenes por hallazgo.`);
+    }
+
     const { id, ...fields } = args;
     
-    // Ahora TypeScript sabe que 'fields.status' es seguro
     await ctx.db.patch(id, fields);
   },
 });
@@ -85,22 +115,44 @@ export const deleteFinding = mutation({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("No autorizado");
 
+    // TODO: Idealmente aquí también borraríamos los archivos del storage usando ctx.storage.delete(id)
+    // para no dejar basura, pero para el MVP está bien así.
     await ctx.db.delete(args.id);
   },
 });
 
-// 5. Obtener TODAS las vulnerabilidades de la organización (Para la vista de Tareas)
+// 5. Obtener TODAS las vulnerabilidades (CON URLs)
 export const getAllFindings = query({
   args: { orgId: v.string() },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return [];
 
-    // Usamos el índice by_orgId que creamos antes
-    return await ctx.db
+    const findings = await ctx.db
       .query("vulnerabilities")
       .withIndex("by_orgId", (q) => q.eq("orgId", args.orgId))
-      .order("desc") // Las más nuevas primero
+      .order("desc")
       .collect();
+
+    // TRANSFORMACIÓN MÁGICA AQUÍ TAMBIÉN
+    return await Promise.all(
+      findings.map(async (f) => ({
+        ...f,
+        imageUrls: f.images 
+          ? await Promise.all(f.images.map((id) => ctx.storage.getUrl(id)))
+          : []
+      }))
+    );
+  },
+});
+
+// 6. Generar URL de subida
+export const generateUploadUrl = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Unauthenticated");
+    
+    return await ctx.storage.generateUploadUrl();
   },
 });

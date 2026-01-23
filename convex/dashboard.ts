@@ -9,16 +9,26 @@ export const getStats = query({
     if (!identity) return null;
 
     // 2. Traemos TODAS las vulns de la organización
-    // (Para un MVP esto está bien. Si tenés 1 millón de registros, se hace de otra forma)
+    // CORRECCIÓN 1: Usamos el índice correcto "by_org"
     const findings = await ctx.db
       .query("vulnerabilities")
       .withIndex("by_orgId", (q) => q.eq("orgId", args.orgId))
       .collect();
 
-    // 3. Calculamos Estadísticas en el servidor
+    // 3. Calculamos Estadísticas con los NUEVOS estados
     const total = findings.length;
-    const critical = findings.filter((f) => f.severity === "critical" && f.status !== "resolved").length;
-    const resolved = findings.filter((f) => f.status === "resolved").length;
+
+    // "Resueltos" ahora son los que están Mitigados o Cerrados manualmente
+    const resolved = findings.filter((f) => 
+      f.status === "mitigated" || 
+      f.status === "closed"
+    ).length;
+
+    // "Críticos Activos": Son Critical Y NO están resueltos (Open, Confirmed o Accepted Risk)
+    const critical = findings.filter((f) => 
+      f.severity === "critical" && 
+      (f.status === "open" || f.status === "confirmed" || f.status === "accepted_risk")
+    ).length;
 
     // 4. Obtenemos las 5 más recientes para el feed de actividad
     const recentActivity = findings
