@@ -10,10 +10,8 @@ export default function DashboardPage() {
   const { organization, isLoaded } = useOrganization();
   const orgId = organization?.id;
 
-  // --- CORRECCIÓN 1: 'listProjects' en lugar de 'getProjects' ---
+  // CORRECCIÓN: Usamos los nombres exactos definidos en Convex
   const projects = useQuery(api.projects.listProjects, orgId ? { orgId } : "skip");
-
-  // --- CORRECCIÓN 2: 'getDashboardStats' en lugar de 'getStats' ---
   const stats = useQuery(api.dashboard.getDashboardStats, orgId ? { orgId } : "skip");
 
   if (!isLoaded) {
@@ -28,7 +26,6 @@ export default function DashboardPage() {
     );
   }
 
-  // Pasamos los datos a la vista (si están cargando, serán undefined y DashboardView debería manejarlo o mostramos skeleton)
   return (
     <DashboardView 
       projects={projects} 

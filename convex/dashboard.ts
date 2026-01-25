@@ -13,6 +13,7 @@ export const getDashboardStats = query({
     const projectIds = projects.map((p) => p._id);
 
     // 2. Obtener las VULNERABILIDADES de esos proyectos
+    // Usamos Promise.all para paralelizar
     const vulnerabilitiesNested = await Promise.all(
       projectIds.map((pid) =>
         ctx.db
