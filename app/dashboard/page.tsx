@@ -10,7 +10,7 @@ export default function DashboardPage() {
   const { organization, isLoaded } = useOrganization();
   const orgId = organization?.id;
 
-  // CORRECCIÓN: Usamos los nombres exactos definidos en Convex
+  // Consultas a la API
   const projects = useQuery(api.projects.listProjects, orgId ? { orgId } : "skip");
   const stats = useQuery(api.dashboard.getDashboardStats, orgId ? { orgId } : "skip");
 

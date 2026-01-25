@@ -1,12 +1,11 @@
 "use client"
 
 import Link from "next/link"
-import { Plus, Search, Filter, FolderKanban, Trash2 } from "lucide-react"
+import { Search, Filter, FolderKanban, Trash2, Loader2, Calendar } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Progress } from "@/components/ui/progress"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,85 +17,70 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
+import { Doc, Id } from "@/convex/_generated/dataModel"
+import { useMutation } from "convex/react"
+import { api } from "@/convex/_generated/api"
+import { useOrganization } from "@clerk/nextjs"
+import { toast } from "sonner"
+import { useState } from "react"
 
-// Datos dummy (luego los reemplazarás con Convex)
-const projects = [
-  {
-    id: "1",
-    name: "E-commerce Security Audit",
-    client: "TechCorp Inc.",
-    status: "In Progress",
-    progress: 65,
-    dueDate: "Jan 25, 2026",
-    vulnerabilities: { critical: 2, high: 5, medium: 8, low: 12 },
-  },
-  {
-    id: "2",
-    name: "Banking Portal Pentest",
-    client: "SecureBank Ltd.",
-    status: "Review",
-    progress: 90,
-    dueDate: "Jan 20, 2026",
-    vulnerabilities: { critical: 0, high: 3, medium: 6, low: 4 },
-  },
-  {
-    id: "3",
-    name: "Healthcare App Assessment",
-    client: "MedTech Solutions",
-    status: "In Progress",
-    progress: 40,
-    dueDate: "Feb 1, 2026",
-    vulnerabilities: { critical: 1, high: 2, medium: 4, low: 3 },
-  },
-  {
-    id: "4",
-    name: "API Gateway Security",
-    client: "CloudFirst",
-    status: "Starting",
-    progress: 10,
-    dueDate: "Feb 15, 2026",
-    vulnerabilities: { critical: 0, high: 1, medium: 0, low: 2 },
-  },
-]
-
-const getStatusColor = (status: string) => {
-  switch (status) {
-    case "In Progress":
-      return "bg-blue-500/10 text-blue-400 border-blue-500/20"
-    case "Review":
-      return "bg-yellow-500/10 text-yellow-400 border-yellow-500/20"
-    case "Starting":
-      return "bg-zinc-500/10 text-zinc-400 border-zinc-500/20"
-    case "Completed":
-      return "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-    default:
-      return "bg-zinc-500/10 text-zinc-400 border-zinc-500/20"
-  }
+interface ProjectsListViewProps {
+  projects?: Doc<"projects">[]
 }
 
-export function ProjectsListView() {
+export function ProjectsListView({ projects }: ProjectsListViewProps) {
+  const { organization } = useOrganization();
+  const orgId = organization?.id;
   
-  // Función simulada para borrar
-  const handleDeleteProject = (e: React.MouseEvent, projectId: string) => {
-    e.preventDefault(); // Evita navegar al link
-    e.stopPropagation(); // Evita navegar al link
-    console.log(`Borrando proyecto ${projectId}...`);
-    // ACÁ LLAMARÍAS A TU MUTATION DE CONVEX
+  const deleteProject = useMutation(api.projects.deleteProject);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const handleDeleteProject = async (e: React.MouseEvent, projectId: Id<"projects">, projectName: string) => {
+    e.preventDefault(); 
+    e.stopPropagation(); 
+
+    if (!orgId) return;
+
+    setDeletingId(projectId);
+    try {
+        await deleteProject({ id: projectId, orgId });
+        toast.success(`Proyecto "${projectName}" eliminado`);
+    } catch (error) {
+        console.error(error);
+        toast.error("Error al eliminar el proyecto");
+    } finally {
+        setDeletingId(null);
+    }
   };
 
-  return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-zinc-100">Proyectos</h1>
-          <p className="text-zinc-400 mt-1">Gestiona tus auditorías de seguridad</p>
-        </div>
-        <Button className="bg-emerald-600 hover:bg-emerald-700 text-white">
-          <Plus className="h-4 w-4 mr-2" />
-          Nuevo Proyecto
-        </Button>
-      </div>
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "active": return "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
+      case "archived": return "bg-zinc-500/10 text-zinc-400 border-zinc-500/20";
+      default: return "bg-blue-500/10 text-blue-400 border-blue-500/20";
+    }
+  }
 
+  if (projects === undefined) {
+      return (
+          <div className="flex justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
+          </div>
+      )
+  }
+
+  if (projects.length === 0) {
+      return (
+          <div className="text-center py-12 border-2 border-dashed border-zinc-800 rounded-lg">
+              <FolderKanban className="h-12 w-12 text-zinc-600 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-zinc-300">No hay proyectos aún</h3>
+              <p className="text-zinc-500">Crea tu primer proyecto para comenzar.</p>
+          </div>
+      )
+  }
+
+  return (
+    <div className="space-y-6">
       <div className="flex items-center gap-4">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
@@ -113,7 +97,7 @@ export function ProjectsListView() {
 
       <div className="grid gap-4">
         {projects.map((project) => (
-          <Link key={project.id} href={`/dashboard/projects/${project.id}`}>
+          <Link key={project._id} href={`/dashboard/projects/${project._id}`}>
             <Card className="bg-zinc-900 border-zinc-800 hover:border-zinc-700 transition-colors cursor-pointer group relative">
               <CardContent className="p-6">
                 <div className="flex items-start justify-between">
@@ -125,34 +109,41 @@ export function ProjectsListView() {
                       <h3 className="font-semibold text-zinc-100 group-hover:text-emerald-400 transition-colors">
                         {project.name}
                       </h3>
-                      <p className="text-sm text-zinc-500">{project.client}</p>
+                      <p className="text-sm text-zinc-500 line-clamp-1">
+                        {project.description || "Sin descripción"}
+                      </p>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-3">
-                    <Badge variant="outline" className={getStatusColor(project.status)}>
+                    <Badge variant="outline" className={`capitalize ${getStatusColor(project.status)}`}>
                       {project.status}
                     </Badge>
                     
-                    {/* ALERT DIALOG INTEGRADO */}
+                    {/* ALERT DIALOG DE BORRADO */}
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
                         <Button
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8 text-zinc-500 hover:text-red-400 hover:bg-zinc-800 z-10"
-                          onClick={(e) => e.stopPropagation()} // ¡IMPORTANTE! Evita entrar al proyecto al hacer click
+                          onClick={(e) => e.stopPropagation()} 
+                          disabled={deletingId === project._id}
                         >
-                          <Trash2 className="h-4 w-4" />
+                          {deletingId === project._id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                              <Trash2 className="h-4 w-4" />
+                          )}
                         </Button>
                       </AlertDialogTrigger>
                       <AlertDialogContent onClick={(e) => e.stopPropagation()} className="bg-zinc-950 border-zinc-800 text-zinc-100">
                         <AlertDialogHeader>
-                          <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
+                          <AlertDialogTitle>¿Eliminar proyecto?</AlertDialogTitle>
                           <AlertDialogDescription className="text-zinc-400">
-                            Esta acción no se puede deshacer. Esto eliminará permanentemente el proyecto 
+                            Esta acción eliminará permanentemente el proyecto 
                             <span className="font-bold text-zinc-100"> "{project.name}" </span>
-                            y todos sus reportes asociados.
+                            y todos sus reportes. No se puede deshacer.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
@@ -161,9 +152,9 @@ export function ProjectsListView() {
                           </AlertDialogCancel>
                           <AlertDialogAction
                             className="bg-red-600 hover:bg-red-700 text-white"
-                            onClick={(e) => handleDeleteProject(e, project.id)}
+                            onClick={(e) => handleDeleteProject(e, project._id, project.name)}
                           >
-                            Sí, eliminar proyecto
+                            Eliminar
                           </AlertDialogAction>
                         </AlertDialogFooter>
                       </AlertDialogContent>
@@ -172,29 +163,10 @@ export function ProjectsListView() {
                 </div>
 
                 <div className="mt-6 flex items-center justify-between">
-                  <div className="flex items-center gap-6">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-zinc-500">Progreso</span>
-                      <Progress value={project.progress} className="h-2 w-24 bg-zinc-800" />
-                      <span className="text-xs text-zinc-400">{project.progress}%</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs">
-                      <span className="text-zinc-500">Vulns:</span>
-                      <span className="px-1.5 py-0.5 rounded bg-red-500/10 text-red-400">
-                        {project.vulnerabilities.critical} C
-                      </span>
-                      <span className="px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-400">
-                        {project.vulnerabilities.high} H
-                      </span>
-                      <span className="px-1.5 py-0.5 rounded bg-yellow-500/10 text-yellow-400">
-                        {project.vulnerabilities.medium} M
-                      </span>
-                      <span className="px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400">
-                        {project.vulnerabilities.low} L
-                      </span>
-                    </div>
+                  <div className="flex items-center gap-2 text-xs text-zinc-500">
+                      <Calendar className="h-3 w-3" />
+                      Creado el {new Date(project._creationTime).toLocaleDateString()}
                   </div>
-                  <span className="text-sm text-zinc-500">Vence: {project.dueDate}</span>
                 </div>
               </CardContent>
             </Card>
