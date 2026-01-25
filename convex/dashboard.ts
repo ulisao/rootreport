@@ -13,7 +13,6 @@ export const getDashboardStats = query({
     const projectIds = projects.map((p) => p._id);
 
     // 2. Obtener las VULNERABILIDADES de esos proyectos
-    // Usamos Promise.all para hacer las búsquedas en paralelo (muy rápido en Convex)
     const vulnerabilitiesNested = await Promise.all(
       projectIds.map((pid) =>
         ctx.db
@@ -23,21 +22,18 @@ export const getDashboardStats = query({
       )
     );
 
-    // Aplanamos el array de arrays en una sola lista
     const vulnerabilities = vulnerabilitiesNested.flat();
 
     // 3. Calcular Estadísticas
     const totalProjects = projects.length;
     const totalVulns = vulnerabilities.length;
     
-    // Contadores por severidad
     const critical = vulnerabilities.filter((v) => v.severity === "critical").length;
     const high = vulnerabilities.filter((v) => v.severity === "high").length;
     const medium = vulnerabilities.filter((v) => v.severity === "medium").length;
     const low = vulnerabilities.filter((v) => v.severity === "low").length;
     const info = vulnerabilities.filter((v) => v.severity === "info").length;
 
-    // Contadores por estado
     const open = vulnerabilities.filter((v) => v.status === "open").length;
     const closed = vulnerabilities.filter((v) => v.status === "closed").length;
     const mitigated = vulnerabilities.filter((v) => v.status === "mitigated").length;
@@ -47,23 +43,18 @@ export const getDashboardStats = query({
       totalVulns,
       openVulns: open,
       fixedVulns: closed + mitigated,
-      
-      // Datos formateados para Gráficos (Recharts)
       severityDistribution: [
-        { name: "Crítica", value: critical, fill: "#ef4444" }, // Red-500
-        { name: "Alta", value: high, fill: "#f97316" },       // Orange-500
-        { name: "Media", value: medium, fill: "#eab308" },    // Yellow-500
-        { name: "Baja", value: low, fill: "#3b82f6" },        // Blue-500
-        { name: "Info", value: info, fill: "#64748b" },       // Slate-500
+        { name: "Crítica", value: critical, fill: "#ef4444" },
+        { name: "Alta", value: high, fill: "#f97316" },
+        { name: "Media", value: medium, fill: "#eab308" },
+        { name: "Baja", value: low, fill: "#3b82f6" },
+        { name: "Info", value: info, fill: "#64748b" },
       ],
-      
       statusDistribution: [
         { name: "Abierto", value: open, fill: "#ef4444" },
         { name: "Mitigado", value: mitigated, fill: "#eab308" },
         { name: "Cerrado", value: closed, fill: "#10b981" },
       ],
-
-      // Últimos 5 hallazgos para "Actividad Reciente"
       recentFindings: vulnerabilities
         .sort((a, b) => b._creationTime - a._creationTime)
         .slice(0, 5)
