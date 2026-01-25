@@ -39,18 +39,25 @@ export const createTemplate = mutation({
 
 // 3. BORRAR PLANTILLA
 export const deleteTemplate = mutation({
-  args: { id: v.id("templates") },
+  args: { 
+    id: v.id("templates"),
+    orgId: v.string() // <--- Agregamos esto para validar propiedad
+  },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Unauthorized");
 
-    // Verificamos que pertenezca a mi org antes de borrar (Seguridad básica)
     const template = await ctx.db.get(args.id);
-    // Nota: Aquí lo ideal sería chequear también el orgId del usuario vs template
-    // pero por simplicidad asumimos que si tiene el ID lo puede borrar.
-    
-    if (template) {
-        await ctx.db.delete(args.id);
+    if (!template) {
+        throw new Error("Template not found");
     }
+
+    // CHECK DE SEGURIDAD:
+    // Solo permitimos borrar si la plantilla pertenece a la Org que dice el usuario
+    if (template.orgId !== args.orgId) {
+        throw new Error("Forbidden: You cannot delete templates from other organizations");
+    }
+    
+    await ctx.db.delete(args.id);
   },
 });

@@ -34,7 +34,9 @@ import {
 import { Label } from "@/components/ui/label";
 import { Plus, Search, Trash2, Book, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { ProLockScreen } from "@/components/pro-lock-screen"; // <--- Importamos el componente nuevo
+import { ProLockScreen } from "@/components/pro-lock-screen";
+
+type Severity = "info" | "low" | "medium" | "high" | "critical";
 
 export function LibraryView() {
   const { organization } = useOrganization();
@@ -65,7 +67,6 @@ export function LibraryView() {
 
   // --- LÓGICA DE BLOQUEO ---
   
-  // Estado de carga inicial (para no mostrar el candado mientras carga)
   if (subscription === undefined || templates === undefined) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -74,10 +75,8 @@ export function LibraryView() {
     );
   }
 
-  // Verificamos si es Pro
   const isPro = subscription?.plan === "pro" || subscription?.plan === "enterprise";
 
-  // SI NO ES PRO -> MOSTRAR CANDADO
   if (!isPro) {
     return (
         <ProLockScreen 
@@ -87,7 +86,7 @@ export function LibraryView() {
     );
   }
 
-  // --- FIN LÓGICA DE BLOQUEO (Si pasa acá, es PRO) ---
+  // --- FIN LÓGICA DE BLOQUEO ---
 
   const filteredTemplates = templates.filter((t) =>
     t.title.toLowerCase().includes(searchTerm.toLowerCase())
@@ -100,8 +99,7 @@ export function LibraryView() {
       await createTemplate({
         ...formData,
         orgId,
-        // @ts-ignore
-        severity: formData.severity,
+        severity: formData.severity as Severity, 
       });
       toast.success("Plantilla guardada en tu librería");
       setIsDialogOpen(false);
@@ -115,9 +113,13 @@ export function LibraryView() {
   };
 
   const handleDelete = async (id: any) => {
+    // CORRECCIÓN DE SEGURIDAD APLICADA:
+    if (!orgId) return; // Validamos que tengamos la Org
+
     if (confirm("¿Seguro que quieres borrar esta plantilla?")) {
       try {
-        await deleteTemplate({ id });
+        // Pasamos ID y orgId para evitar IDOR
+        await deleteTemplate({ id, orgId });
         toast.success("Plantilla eliminada");
       } catch (error) {
         toast.error("Error al eliminar");

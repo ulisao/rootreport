@@ -78,4 +78,10 @@ export default defineSchema({
     // Quién la creó (opcional, para audit log futuro)
     createdById: v.string(),
   }).index("by_orgId", ["orgId"]), // Índice para listar rápido
+
+  orgSettings: defineTable({
+    orgId: v.string(),
+    primaryColor: v.optional(v.string()),   // Ej: "#10b981"
+    logoStorageId: v.optional(v.id("_storage")), // ID del archivo en Convex Storage
+  }).index("by_orgId", ["orgId"]),
 });

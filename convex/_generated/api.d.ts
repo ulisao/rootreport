@@ -11,6 +11,7 @@
 import type * as dashboard from "../dashboard.js";
 import type * as library from "../library.js";
 import type * as projects from "../projects.js";
+import type * as settings from "../settings.js";
 import type * as subscriptions from "../subscriptions.js";
 import type * as vulnerabilities from "../vulnerabilities.js";
 
@@ -24,6 +25,7 @@ declare const fullApi: ApiFromModules<{
   dashboard: typeof dashboard;
   library: typeof library;
   projects: typeof projects;
+  settings: typeof settings;
   subscriptions: typeof subscriptions;
   vulnerabilities: typeof vulnerabilities;
 }>;
