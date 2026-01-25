@@ -1,56 +1,44 @@
-import { NextResponse } from "next/server";
-import { MercadoPagoConfig, Preference } from "mercadopago";
-import { currentUser } from "@clerk/nextjs/server";
+// app/api/checkout/route.ts
+import { MercadoPagoConfig, PreApproval } from 'mercadopago'; // <--- CAMBIO IMPORTANTE
+import { NextResponse } from 'next/server';
 
-const client = new MercadoPagoConfig({ accessToken: process.env.MP_ACCESS_TOKEN! });
+const client = new MercadoPagoConfig({ 
+    accessToken: process.env.MP_ACCESS_TOKEN! 
+});
 
 export async function POST(req: Request) {
-  const user = await currentUser();
-  if (!user) return new NextResponse("Unauthorized", { status: 401 });
+    try {
+        const body = await req.json();
+        const { orgId } = body;
+        if (!orgId) return NextResponse.json({ error: "OrgId required" }, { status: 400 });
 
-  try {
-    const body = await req.json();
-    const { orgId } = body;
-
-    if (!orgId) {
-        return new NextResponse("OrgId is required", { status: 400 });
-    }
-
-    // --- CORRECCIÓN ---
-    // 1. Debug: Mirá esto en tu terminal cuando le des click
-    console.log("🔍 URL detectada:", process.env.NEXT_PUBLIC_APP_URL);
-
-    // 2. Fallback: Si la env es undefined, usa localhost a la fuerza
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-
-    const preference = new Preference(client);
-
-    const result = await preference.create({
-      body: {
-        items: [
-          {
-            id: "agency-pro",
-            title: "RootReport Agency Pro",
-            quantity: 1,
-            unit_price: 49000,
-            currency_id: "ARS",
-          },
-        ],
-        external_reference: orgId, 
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL;
+        if (!baseUrl) return NextResponse.json({ error: "Base URL required" }, { status: 500 });
         
-        // 3. Usamos la variable segura 'baseUrl'
-        back_urls: {
-          success: `${baseUrl}/dashboard`, 
-          failure: `${baseUrl}/dashboard`,
-          pending: `${baseUrl}/dashboard`,
-        },
-        auto_return: "approved",
-      },
-    });
+        // CAMBIO: Usamos PreApproval para suscripciones
+        const preapproval = new PreApproval(client);
 
-    return NextResponse.json({ url: result.init_point });
-  } catch (error) {
-    console.error("❌ Error MP:", error); 
-    return new NextResponse("Error creating preference", { status: 500 });
-  }
+        const result = await preapproval.create({
+          body: {
+            reason: "Suscripción RootReport Agency Pro (Mensual)",
+            external_reference: orgId,
+            payer_email: "test@test.com", // Idealmente, el email del usuario de Clerk
+            auto_recurring: {
+              frequency: 1,
+              frequency_type: "months",
+              transaction_amount: 29, // Precio en ARS
+              currency_id: "ARS"
+            },
+            back_url: `${baseUrl}/dashboard/settings?payment=success`,
+            status: "pending",
+          },
+        });
+
+        // La URL para redirigir es diferente en suscripciones
+        return NextResponse.json({ url: result.init_point });
+
+    } catch (error) {
+        console.error("Error creando suscripción:", error);
+        return NextResponse.json({ error: "Error interno" }, { status: 500 });
+    }
 }

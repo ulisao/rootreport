@@ -1,45 +1,79 @@
 import { query } from "./_generated/server";
 import { v } from "convex/values";
 
-export const getStats = query({
+export const getDashboardStats = query({
   args: { orgId: v.string() },
   handler: async (ctx, args) => {
-    // 1. Verificamos usuario
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return null;
-
-    // 2. Traemos TODAS las vulns de la organización
-    // CORRECCIÓN 1: Usamos el índice correcto "by_org"
-    const findings = await ctx.db
-      .query("vulnerabilities")
+    // 1. Obtener todos los PROYECTOS de la organización
+    const projects = await ctx.db
+      .query("projects")
       .withIndex("by_orgId", (q) => q.eq("orgId", args.orgId))
       .collect();
 
-    // 3. Calculamos Estadísticas con los NUEVOS estados
-    const total = findings.length;
+    const projectIds = projects.map((p) => p._id);
 
-    // "Resueltos" ahora son los que están Mitigados o Cerrados manualmente
-    const resolved = findings.filter((f) => 
-      f.status === "mitigated" || 
-      f.status === "closed"
-    ).length;
+    // 2. Obtener las VULNERABILIDADES de esos proyectos
+    // Usamos Promise.all para hacer las búsquedas en paralelo (muy rápido en Convex)
+    const vulnerabilitiesNested = await Promise.all(
+      projectIds.map((pid) =>
+        ctx.db
+          .query("vulnerabilities")
+          .withIndex("by_projectId", (q) => q.eq("projectId", pid))
+          .collect()
+      )
+    );
 
-    // "Críticos Activos": Son Critical Y NO están resueltos (Open, Confirmed o Accepted Risk)
-    const critical = findings.filter((f) => 
-      f.severity === "critical" && 
-      (f.status === "open" || f.status === "confirmed" || f.status === "accepted_risk")
-    ).length;
+    // Aplanamos el array de arrays en una sola lista
+    const vulnerabilities = vulnerabilitiesNested.flat();
 
-    // 4. Obtenemos las 5 más recientes para el feed de actividad
-    const recentActivity = findings
-      .sort((a, b) => b._creationTime - a._creationTime)
-      .slice(0, 5);
+    // 3. Calcular Estadísticas
+    const totalProjects = projects.length;
+    const totalVulns = vulnerabilities.length;
+    
+    // Contadores por severidad
+    const critical = vulnerabilities.filter((v) => v.severity === "critical").length;
+    const high = vulnerabilities.filter((v) => v.severity === "high").length;
+    const medium = vulnerabilities.filter((v) => v.severity === "medium").length;
+    const low = vulnerabilities.filter((v) => v.severity === "low").length;
+    const info = vulnerabilities.filter((v) => v.severity === "info").length;
+
+    // Contadores por estado
+    const open = vulnerabilities.filter((v) => v.status === "open").length;
+    const closed = vulnerabilities.filter((v) => v.status === "closed").length;
+    const mitigated = vulnerabilities.filter((v) => v.status === "mitigated").length;
 
     return {
-      total,
-      critical,
-      resolved,
-      recentActivity
+      totalProjects,
+      totalVulns,
+      openVulns: open,
+      fixedVulns: closed + mitigated,
+      
+      // Datos formateados para Gráficos (Recharts)
+      severityDistribution: [
+        { name: "Crítica", value: critical, fill: "#ef4444" }, // Red-500
+        { name: "Alta", value: high, fill: "#f97316" },       // Orange-500
+        { name: "Media", value: medium, fill: "#eab308" },    // Yellow-500
+        { name: "Baja", value: low, fill: "#3b82f6" },        // Blue-500
+        { name: "Info", value: info, fill: "#64748b" },       // Slate-500
+      ],
+      
+      statusDistribution: [
+        { name: "Abierto", value: open, fill: "#ef4444" },
+        { name: "Mitigado", value: mitigated, fill: "#eab308" },
+        { name: "Cerrado", value: closed, fill: "#10b981" },
+      ],
+
+      // Últimos 5 hallazgos para "Actividad Reciente"
+      recentFindings: vulnerabilities
+        .sort((a, b) => b._creationTime - a._creationTime)
+        .slice(0, 5)
+        .map(v => ({
+            _id: v._id,
+            title: v.title,
+            severity: v.severity,
+            project: projects.find(p => p._id === v.projectId)?.name || "Sin Proyecto",
+            date: v._creationTime
+        }))
     };
   },
 });

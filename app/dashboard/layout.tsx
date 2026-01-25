@@ -1,22 +1,24 @@
-"use client"
+"use client";
 
-import type React from "react"
-import { useState } from "react"
-import Link from "next/link"
-import { usePathname } from "next/navigation"
-import { OrganizationSwitcher, UserButton, useUser } from "@clerk/nextjs"
+import type React from "react";
+import { useState } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { OrganizationSwitcher, UserButton, useUser } from "@clerk/nextjs";
 import {
   Shield,
   LayoutDashboard,
   FolderKanban,
-  CheckSquare,/* Users,*/ Settings, // Iconos comentados por ahora
+  CheckSquare,
+  Users,
+  Settings, // Iconos comentados por ahora
   Bell,
   ChevronRight,
   PanelLeftClose,
   PanelLeft,
-} from "lucide-react"
-import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
 // --- NAVEGACIÓN LIMPIA (MVP) ---
 // Comenté las páginas que aún no existen para evitar errores 404.
@@ -25,26 +27,30 @@ const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Proyectos", href: "/dashboard/projects", icon: FolderKanban },
   { name: "Tareas", href: "/dashboard/tasks", icon: CheckSquare },
-  // { name: "Equipo", href: "/dashboard/team", icon: Users },
+  { name: "Equipo", href: "/dashboard/team", icon: Users },
   { name: "Configuración", href: "/dashboard/settings", icon: Settings },
-]
+];
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const pathname = usePathname()
-  const { user } = useUser()
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const pathname = usePathname();
+  const { user } = useUser();
 
   // Breadcrumbs Logic
   const getBreadcrumbs = () => {
-    const paths = pathname.split("/").filter(Boolean)
+    const paths = pathname.split("/").filter(Boolean);
     return paths.map((path, index) => ({
       name: path.charAt(0).toUpperCase() + path.slice(1).replace(/-/g, " "),
       href: "/" + paths.slice(0, index + 1).join("/"),
       current: index === paths.length - 1,
-    }))
-  }
+    }));
+  };
 
-  const breadcrumbs = getBreadcrumbs()
+  const breadcrumbs = getBreadcrumbs();
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex">
@@ -57,16 +63,24 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       >
         {/* Logo */}
         <div className="h-16 flex items-center px-4 border-b border-zinc-800 justify-center sm:justify-start">
-          <Link href="/dashboard" className="flex items-center gap-3 overflow-hidden">
+          <Link
+            href="/dashboard"
+            className="flex items-center gap-3 overflow-hidden"
+          >
             <Shield className="h-8 w-8 text-emerald-500 shrink-0" />
-            {!sidebarCollapsed && <span className="text-lg font-bold whitespace-nowrap">RootReport</span>}
+            {!sidebarCollapsed && (
+              <span className="text-lg font-bold whitespace-nowrap">
+                RootReport
+              </span>
+            )}
           </Link>
         </div>
 
         {/* Menú de Navegación */}
         <nav className="flex-1 py-4 px-2 space-y-1">
           {navigation.map((item) => {
-            const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
+            const isActive =
+              pathname === item.href || pathname.startsWith(item.href + "/");
             return (
               <Link
                 key={item.name}
@@ -76,26 +90,31 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   isActive
                     ? "bg-emerald-500/10 text-emerald-400"
                     : "text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800",
-                  sidebarCollapsed && "justify-center"
+                  sidebarCollapsed && "justify-center",
                 )}
                 title={sidebarCollapsed ? item.name : ""}
               >
                 <item.icon className="h-5 w-5 shrink-0" />
                 {!sidebarCollapsed && <span>{item.name}</span>}
               </Link>
-            )
+            );
           })}
         </nav>
 
         {/* Footer del Sidebar (Usuario) */}
-        <div className={cn("p-4 border-t border-zinc-800 flex items-center gap-3", sidebarCollapsed && "justify-center px-2")}>
-          <UserButton 
+        <div
+          className={cn(
+            "p-4 border-t border-zinc-800 flex items-center gap-3",
+            sidebarCollapsed && "justify-center px-2",
+          )}
+        >
+          <UserButton
             afterSignOutUrl="/"
             appearance={{
               elements: {
                 userButtonAvatarBox: "h-8 w-8",
                 userButtonBox: "flex-row-reverse",
-              }
+              },
             }}
           />
           {!sidebarCollapsed && (
@@ -112,8 +131,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </aside>
 
       {/* MAIN CONTENT */}
-      <div className={cn("flex-1 flex flex-col transition-all duration-300 min-h-screen", sidebarCollapsed ? "ml-16" : "ml-64")}>
-        
+      <div
+        className={cn(
+          "flex-1 flex flex-col transition-all duration-300 min-h-screen",
+          sidebarCollapsed ? "ml-16" : "ml-64",
+        )}
+      >
         {/* Top Header */}
         <header className="h-16 border-b border-zinc-800 bg-zinc-950 flex items-center justify-between px-6 sticky top-0 z-30">
           <div className="flex items-center gap-4">
@@ -123,18 +146,29 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
               className="text-zinc-400 hover:text-zinc-100"
             >
-              {sidebarCollapsed ? <PanelLeft className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
+              {sidebarCollapsed ? (
+                <PanelLeft className="h-5 w-5" />
+              ) : (
+                <PanelLeftClose className="h-5 w-5" />
+              )}
             </Button>
 
             {/* Breadcrumbs (Navegación superior) */}
             <nav className="flex items-center gap-2 text-sm hidden sm:flex">
               {breadcrumbs.map((crumb, index) => (
                 <div key={crumb.href} className="flex items-center gap-2">
-                  {index > 0 && <ChevronRight className="h-4 w-4 text-zinc-600" />}
+                  {index > 0 && (
+                    <ChevronRight className="h-4 w-4 text-zinc-600" />
+                  )}
                   {crumb.current ? (
-                    <span className="text-zinc-100 font-medium">{crumb.name}</span>
+                    <span className="text-zinc-100 font-medium">
+                      {crumb.name}
+                    </span>
                   ) : (
-                    <Link href={crumb.href} className="text-zinc-400 hover:text-zinc-100 transition-colors">
+                    <Link
+                      href={crumb.href}
+                      className="text-zinc-400 hover:text-zinc-100 transition-colors"
+                    >
                       {crumb.name}
                     </Link>
                   )}
@@ -145,28 +179,34 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
           <div className="flex items-center gap-4">
             {/* Switcher de Organización */}
-            <OrganizationSwitcher 
-              hidePersonal={false}
+            <OrganizationSwitcher
+              hidePersonal
+              // ESTO ES CLAVE: Redirige a TU página donde ya ocultamos cosas
+              organizationProfileUrl="/dashboard/team"
               appearance={{
                 elements: {
-                  organizationSwitcherTrigger: "text-zinc-100 hover:bg-zinc-800 p-2 rounded-md",
-                  organizationPreviewTextContainer: "text-zinc-100",
-                }
+                  rootBox: "flex w-full",
+                  organizationPreviewMainIdentifier:
+                    "text-zinc-200 font-medium",
+                  organizationPreviewSecondaryIdentifier: "text-zinc-400",
+                },
               }}
             />
 
             {/* Notificaciones (Sin el globo rojo falso) */}
-            <Button variant="ghost" size="icon" className="text-zinc-400 hover:text-zinc-100">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-zinc-400 hover:text-zinc-100"
+            >
               <Bell className="h-5 w-5" />
             </Button>
           </div>
         </header>
 
         {/* Contenido de la Página */}
-        <main className="flex-1 p-6 overflow-auto">
-          {children}
-        </main>
+        <main className="flex-1 p-6 overflow-auto">{children}</main>
       </div>
     </div>
-  )
+  );
 }

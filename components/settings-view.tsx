@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Loader2, Upload, Crown, Lock, Check, CreditCard } from "lucide-react";
+import { Loader2, Upload, Crown, Lock, Check } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
@@ -29,27 +29,30 @@ export function SettingsView() {
   const updateLogo = useMutation(api.settings.updateLogo);
 
   // ESTADOS
-  const [color, setColor] = useState("#10b981");
+  const [color, setColor] = useState("#10b981"); // Default Emerald
   const [isUploading, setIsUploading] = useState(false);
-  const [isLoadingCheckout, setIsLoadingCheckout] = useState(false); // <--- Nuevo estado
+  const [isLoadingCheckout, setIsLoadingCheckout] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!sub || settings === undefined) {
-    return <div className="flex h-full items-center justify-center"><Loader2 className="animate-spin text-emerald-500" /></div>;
+    return (
+      <div className="flex h-full items-center justify-center">
+        <Loader2 className="animate-spin text-emerald-500 h-8 w-8" />
+      </div>
+    );
   }
 
   const isPro = sub?.plan === "pro" || sub?.plan === "enterprise";
 
   // --- MANEJADORES ---
 
-  // 1. FUNCIÓN DE CHECKOUT (NUEVA)
+  // 1. FUNCIÓN DE CHECKOUT (Para activar el plan)
   const handleCheckout = async () => {
     if (!orgId) return;
     setIsLoadingCheckout(true);
 
     try {
-        // Llamamos a nuestro endpoint
         const response = await fetch("/api/checkout", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -57,7 +60,8 @@ export function SettingsView() {
         });
 
         if (!response.ok) {
-            throw new Error("Error al iniciar checkout");
+            const errorData = await response.json();
+            throw new Error(errorData.error || "Error al iniciar checkout");
         }
 
         const data = await response.json();
@@ -72,7 +76,10 @@ export function SettingsView() {
     } catch (error) {
         console.error(error);
         toast.error("Hubo un problema al conectar con Mercado Pago");
-        setIsLoadingCheckout(false);
+    } finally {
+        // No bajamos el loading si redirige, para evitar que el usuario toque de nuevo
+        // Pero si hubo error, sí lo bajamos
+        setTimeout(() => setIsLoadingCheckout(false), 2000);
     }
   };
 
@@ -91,7 +98,9 @@ export function SettingsView() {
 
     setIsUploading(true);
     try {
+        // 1. Obtener URL de subida
         const postUrl = await generateUploadUrl();
+        // 2. Subir archivo a Convex Storage
         const result = await fetch(postUrl, {
             method: "POST",
             headers: { "Content-Type": file.type },
@@ -100,6 +109,7 @@ export function SettingsView() {
         if (!result.ok) throw new Error("Upload failed");
         const { storageId } = await result.json();
         
+        // 3. Guardar ID en base de datos
         await updateLogo({ orgId, storageId });
         toast.success("Logo actualizado correctamente");
     } catch (error) {
@@ -119,11 +129,11 @@ export function SettingsView() {
           <CardTitle className="text-zinc-100 flex items-center justify-between">
             <span>Plan Actual</span>
             <Badge variant={isPro ? "default" : "secondary"} className={isPro ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : ""}>
-                {sub?.plan?.toUpperCase() || "FREE"}
+                {sub?.plan === "pro" ? "AGENCY PRO" : (sub?.plan?.toUpperCase() || "FREE")}
             </Badge>
           </CardTitle>
           <CardDescription className="text-zinc-400">
-            Gestiona tu suscripción y límites.
+            Gestiona tu suscripción y límites de la cuenta.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -134,6 +144,10 @@ export function SettingsView() {
             <div className="flex items-center gap-4 text-sm text-zinc-300">
                 <Check className="h-4 w-4 text-emerald-500" /> 
                 {isPro ? "Personalización de Marca (Logo y Colores) ACTIVA" : "Personalización de Marca BLOQUEADA"}
+            </div>
+            <div className="flex items-center gap-4 text-sm text-zinc-300">
+                <Check className="h-4 w-4 text-emerald-500" /> 
+                {isPro ? "Marca de agua de RootReport ELIMINADA" : "Marca de agua en reportes PDF"}
             </div>
         </CardContent>
         <CardFooter className="bg-zinc-950/50 border-t border-zinc-800 p-4">
@@ -150,17 +164,19 @@ export function SettingsView() {
                         </>
                     ) : (
                         <>
-                            <Crown className="mr-2 h-4 w-4" /> Actualizar a Agency Pro
+                            <Crown className="mr-2 h-4 w-4" /> Actualizar a Agency Pro ($29/mes)
                         </>
                     )}
                 </Button>
             ) : (
-                <div className="flex w-full gap-3">
-                    <Button variant="outline" className="w-full border-zinc-700 text-zinc-400 cursor-not-allowed" disabled>
-                        Plan Activo
-                    </Button>
-                    {/* Opcional: Botón para ir al portal de cliente si existiera */}
-                </div>
+                // BOTÓN DE GESTIÓN (PORTAL DE CLIENTE MP)
+                <Button 
+                    variant="outline" 
+                    className="w-full border-zinc-700 text-zinc-300 hover:text-white hover:bg-zinc-900"
+                    onClick={() => window.open("https://www.mercadopago.com.ar/subscriptions", "_blank")}
+                >
+                    Gestionar o Cancelar Suscripción (Mercado Pago)
+                </Button>
             )}
         </CardFooter>
       </Card>
@@ -172,7 +188,6 @@ export function SettingsView() {
                 <Lock className="h-8 w-8 text-zinc-500 mb-2" />
                 <h3 className="text-lg font-bold text-zinc-100">Funcionalidad Pro</h3>
                 <p className="text-sm text-zinc-400 mb-4">Actualiza tu plan para personalizar tus reportes.</p>
-                {/* Botón duplicado para facilitar la conversión */}
                 <Button size="sm" onClick={handleCheckout} disabled={isLoadingCheckout} className="bg-emerald-600 text-white">
                      Desbloquear ahora
                 </Button>

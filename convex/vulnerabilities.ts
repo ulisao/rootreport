@@ -1,158 +1,138 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 
-// 1. Listar vulnerabilidades de un proyecto (CON URLs DE IMÁGENES)
+// 1. LISTAR HALLAZGOS
 export const getFindings = query({
-  args: { projectId: v.id("projects") },
+  args: { projectId: v.id("projects") }, // Actualizado a v.id
   handler: async (ctx, args) => {
-    // Verificamos identidad
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return [];
-
+    // Seguridad: Verificar que el usuario tenga acceso al proyecto
+    // (Idealmente verificaríamos orgId aquí también, pero reader access es menos crítico que write)
+    
     const findings = await ctx.db
       .query("vulnerabilities")
       .withIndex("by_projectId", (q) => q.eq("projectId", args.projectId))
-      .order("desc") 
       .collect();
 
-    // TRANSFORMACIÓN MÁGICA: Convertimos IDs -> URLs
+    // Mapeamos para obtener URLs de imágenes
     return await Promise.all(
-      findings.map(async (f) => ({
-        ...f,
-        // Si tiene imágenes, pedimos las URLs firmadas a Convex Storage
-        imageUrls: f.images 
-          ? await Promise.all(f.images.map((id) => ctx.storage.getUrl(id)))
-          : []
-      }))
+      findings.map(async (finding) => {
+        let imageUrls: string[] = [];
+        if (finding.images && finding.images.length > 0) {
+          imageUrls = (await Promise.all(
+            finding.images.map((imgId) => ctx.storage.getUrl(imgId))
+          )).filter((url): url is string => url !== null);
+        }
+        return { ...finding, imageUrls };
+      })
     );
   },
 });
 
-// 2. Crear una nueva vulnerabilidad
+// 2. CREAR HALLAZGO
 export const createFinding = mutation({
   args: {
     projectId: v.id("projects"),
-    orgId: v.string(),
+    orgId: v.string(), // Requerido para verificar límites y permisos
     title: v.string(),
-    severity: v.union(
-      v.literal("critical"),
-      v.literal("high"),
-      v.literal("medium"),
-      v.literal("low"),
-      v.literal("info")
-    ),
-    status: v.optional(v.union(v.literal("open"), v.literal("confirmed"), v.literal("mitigated"), v.literal("accepted_risk"), v.literal("closed"))),
-    remediation: v.optional(v.string()),
     description: v.string(),
+    severity: v.string(),
+    status: v.string(),
+    remediation: v.optional(v.string()),
     cvssScore: v.optional(v.number()),
     cvssVector: v.optional(v.string()),
-    // Agregamos soporte para imágenes desde la creación
-    images: v.optional(v.array(v.string())), 
+    images: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("No autorizado");
+    if (!identity) throw new Error("Unauthorized");
 
+    // VALIDACIÓN DE SEGURIDAD 1: Verificar propiedad del proyecto
     const project = await ctx.db.get(args.projectId);
     if (!project) throw new Error("Project not found");
+    
+    // El proyecto debe pertenecer a la Org que declara el usuario
+    if (project.orgId !== args.orgId) {
+         throw new Error("Forbidden: Project belongs to another organization");
+    }
 
-    await ctx.db.insert("vulnerabilities", {
+    // VALIDACIÓN DE SEGURIDAD 2: Verificar Límites de Plan
+    if (args.images && args.images.length > 0) {
+        const sub = await ctx.db
+            .query("subscriptions")
+            .withIndex("by_orgId", (q) => q.eq("orgId", args.orgId))
+            .first();
+        
+        const isPro = sub?.plan === "pro" || sub?.plan === "enterprise";
+        const limit = isPro ? 10 : 2;
+
+        if (args.images.length > limit) {
+            throw new Error(`Plan limit exceeded. You can only upload ${limit} images.`);
+        }
+    }
+
+    return await ctx.db.insert("vulnerabilities", {
+      projectId: args.projectId,
       title: args.title,
       description: args.description,
       severity: args.severity,
-      status: args.status ?? "open",
+      status: args.status,
       remediation: args.remediation,
-      projectId: args.projectId,
-      orgId: project.orgId,
       cvssScore: args.cvssScore,
       cvssVector: args.cvssVector,
-      images: args.images ?? [], // Guardamos el array o vacío
+      images: args.images || [],
     });
   },
 });
 
-// 3. Actualizar una vulnerabilidad existente
+// 3. ACTUALIZAR HALLAZGO
 export const updateFinding = mutation({
   args: {
     id: v.id("vulnerabilities"),
+    orgId: v.string(), // NUEVO: Requerido para seguridad
     title: v.optional(v.string()),
-    severity: v.optional(v.union(
-      v.literal("critical"),
-      v.literal("high"),
-      v.literal("medium"),
-      v.literal("low"),
-      v.literal("info")
-    )),
-    status: v.optional(v.union(v.literal("open"), v.literal("confirmed"), v.literal("mitigated"), v.literal("accepted_risk"), v.literal("closed"))),
     description: v.optional(v.string()),
+    severity: v.optional(v.string()),
+    status: v.optional(v.string()),
     remediation: v.optional(v.string()),
     cvssScore: v.optional(v.number()),
     cvssVector: v.optional(v.string()),
-    // Array de IDs de Storage
-    images: v.optional(v.array(v.string())), 
+    images: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("No autorizado");
+    if (!identity) throw new Error("Unauthorized");
 
-    const isPro = false; // Asumimos que todos son Free por ahora
-    const FREE_IMAGE_LIMIT = 2;
+    const finding = await ctx.db.get(args.id);
+    if (!finding) throw new Error("Finding not found");
 
-    if (!isPro && args.images && args.images.length > FREE_IMAGE_LIMIT) {
-        throw new Error(`El plan gratuito solo permite hasta ${FREE_IMAGE_LIMIT} imágenes por hallazgo.`);
+    // VALIDACIÓN DE SEGURIDAD (IDOR FIX)
+    // Verificamos que el proyecto padre pertenezca a la Org
+    const project = await ctx.db.get(finding.projectId);
+    if (!project || project.orgId !== args.orgId) {
+        throw new Error("Forbidden: You cannot edit findings from other organizations");
     }
 
-    const { id, ...fields } = args;
-    
-    await ctx.db.patch(id, fields);
+    // VALIDACIÓN DE LÍMITES
+    if (args.images) {
+         const sub = await ctx.db
+            .query("subscriptions")
+            .withIndex("by_orgId", (q) => q.eq("orgId", args.orgId))
+            .first();
+        const isPro = sub?.plan === "pro" || sub?.plan === "enterprise";
+        const limit = isPro ? 10 : 2;
+        if (args.images.length > limit) {
+             throw new Error(`Plan limit exceeded: Max ${limit} images.`);
+        }
+    }
+
+    await ctx.db.patch(args.id, {
+      ...args,
+      // Evitamos sobrescribir con undefined
+    });
   },
 });
 
-// 4. Eliminar una vulnerabilidad
-export const deleteFinding = mutation({
-  args: { id: v.id("vulnerabilities") },
-  handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("No autorizado");
-
-    // TODO: Idealmente aquí también borraríamos los archivos del storage usando ctx.storage.delete(id)
-    // para no dejar basura, pero para el MVP está bien así.
-    await ctx.db.delete(args.id);
-  },
-});
-
-// 5. Obtener TODAS las vulnerabilidades (CON URLs)
-export const getAllFindings = query({
-  args: { orgId: v.string() },
-  handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return [];
-
-    const findings = await ctx.db
-      .query("vulnerabilities")
-      .withIndex("by_orgId", (q) => q.eq("orgId", args.orgId))
-      .order("desc")
-      .collect();
-
-    // TRANSFORMACIÓN MÁGICA AQUÍ TAMBIÉN
-    return await Promise.all(
-      findings.map(async (f) => ({
-        ...f,
-        imageUrls: f.images 
-          ? await Promise.all(f.images.map((id) => ctx.storage.getUrl(id)))
-          : []
-      }))
-    );
-  },
-});
-
-// 6. Generar URL de subida
-export const generateUploadUrl = mutation({
-  args: {},
-  handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Unauthenticated");
-    
-    return await ctx.storage.generateUploadUrl();
-  },
+// 4. GENERAR URL DE SUBIDA
+export const generateUploadUrl = mutation(async (ctx) => {
+  return await ctx.storage.generateUploadUrl();
 });

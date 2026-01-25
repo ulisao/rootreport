@@ -124,3 +124,20 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Oculta el botón "Billing" en la barra de navegación del perfil */
+.cl-navbarButton[data-value="billing"],
+.cl-navbarButton[href*="billing"] {
+  display: none !important;
+}
+
+/* Oculta la sección de contenido si por error se llega ahí */
+.cl-profileSection[data-id="billing"] {
+  display: none !important;
+}
+
+/* Oculta el item "Manage Billing" en el menú desplegable del Switcher */
+.cl-userButtonPopoverActionButton[data-action="manageBilling"],
+.cl-organizationSwitcherPopoverActionButton[data-action="manageBilling"] {
+  display: none !important;
+}
