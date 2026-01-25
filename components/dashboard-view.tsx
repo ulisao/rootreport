@@ -1,268 +1,240 @@
-"use client"
+"use client";
 
-import Link from "next/link"
-import { FolderKanban, AlertTriangle, AlertCircle, FileText, TrendingUp, Clock, ArrowRight } from "lucide-react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Badge } from "@/components/ui/badge"
-import { Progress } from "@/components/ui/progress"
-import { Button } from "@/components/ui/button"
+import Link from "next/link";
+import { 
+  FolderKanban, 
+  AlertTriangle, 
+  CheckCircle2, 
+  FileText, 
+  ArrowRight, 
+  ShieldAlert,
+  Activity
+} from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { 
+  PieChart, 
+  Pie, 
+  Cell, 
+  ResponsiveContainer, 
+  Tooltip as RechartsTooltip, 
+  Legend, 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid 
+} from "recharts";
+import { Doc } from "@/convex/_generated/dataModel";
 
-const kpiData = [
-  {
-    title: "Active Projects",
-    value: "8",
-    change: "+2 this month",
-    icon: FolderKanban,
-    color: "text-emerald-500",
-    bgColor: "bg-emerald-500/10",
-  },
-  {
-    title: "Open Vulnerabilities",
-    value: "47",
-    change: "-12 from last week",
-    icon: AlertTriangle,
-    color: "text-yellow-500",
-    bgColor: "bg-yellow-500/10",
-  },
-  {
-    title: "Critical Issues",
-    value: "5",
-    change: "Requires attention",
-    icon: AlertCircle,
-    color: "text-red-500",
-    bgColor: "bg-red-500/10",
-  },
-  {
-    title: "Reports Generated",
-    value: "23",
-    change: "+5 this month",
-    icon: FileText,
-    color: "text-blue-500",
-    bgColor: "bg-blue-500/10",
-  },
-]
-
-const recentActivity = [
-  {
-    user: "Sarah Chen",
-    avatar: "SC",
-    action: "added a finding",
-    target: "SQL Injection in Login Form",
-    project: "E-commerce Audit",
-    time: "5 minutes ago",
-  },
-  {
-    user: "Mike Johnson",
-    avatar: "MJ",
-    action: "marked as fixed",
-    target: "XSS in Search",
-    project: "Banking Portal",
-    time: "1 hour ago",
-  },
-  {
-    user: "Emily Davis",
-    avatar: "ED",
-    action: "generated report for",
-    target: "",
-    project: "Healthcare App",
-    time: "2 hours ago",
-  },
-  {
-    user: "John Doe",
-    avatar: "JD",
-    action: "commented on",
-    target: "IDOR Vulnerability",
-    project: "API Gateway",
-    time: "3 hours ago",
-  },
-]
-
-const activeProjects = [
-  {
-    id: "1",
-    name: "E-commerce Security Audit",
-    client: "TechCorp Inc.",
-    status: "In Progress",
-    progress: 65,
-    dueDate: "Jan 25, 2026",
-  },
-  {
-    id: "2",
-    name: "Banking Portal Pentest",
-    client: "SecureBank Ltd.",
-    status: "Review",
-    progress: 90,
-    dueDate: "Jan 20, 2026",
-  },
-  {
-    id: "3",
-    name: "Healthcare App Assessment",
-    client: "MedTech Solutions",
-    status: "In Progress",
-    progress: 40,
-    dueDate: "Feb 1, 2026",
-  },
-  {
-    id: "4",
-    name: "API Gateway Security",
-    client: "CloudFirst",
-    status: "Starting",
-    progress: 10,
-    dueDate: "Feb 15, 2026",
-  },
-]
-
-const getStatusColor = (status: string) => {
-  switch (status) {
-    case "In Progress":
-      return "bg-blue-500/10 text-blue-400 border-blue-500/20"
-    case "Review":
-      return "bg-yellow-500/10 text-yellow-400 border-yellow-500/20"
-    case "Starting":
-      return "bg-zinc-500/10 text-zinc-400 border-zinc-500/20"
-    case "Completed":
-      return "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-    default:
-      return "bg-zinc-500/10 text-zinc-400 border-zinc-500/20"
-  }
+// DEFINICIÓN DE TIPOS (Para que TypeScript no se queje)
+interface DashboardStats {
+  totalProjects: number;
+  totalVulns: number;
+  openVulns: number;
+  fixedVulns: number;
+  severityDistribution: { name: string; value: number; fill: string }[];
+  statusDistribution: { name: string; value: number; fill: string }[];
+  recentFindings: {
+    _id: string;
+    title: string;
+    severity: string;
+    project: string;
+    date: number;
+  }[];
 }
 
-export function DashboardView() {
-  return (
-    <div className="p-6 space-y-8">
-      {/* Welcome Section */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-zinc-100">Welcome back, John</h1>
-          <p className="text-zinc-400 mt-1">Here&apos;s what&apos;s happening with your projects today.</p>
+interface DashboardViewProps {
+  projects?: Doc<"projects">[];
+  stats?: DashboardStats;
+}
+
+export function DashboardView({ projects, stats }: DashboardViewProps) {
+  
+  // SKELETON LOADING (Si los datos aún no llegaron)
+  if (!stats || !projects) {
+    return (
+      <div className="p-6 space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-32 rounded-xl bg-zinc-900" />)}
         </div>
-        <Link href="/dashboard/projects/new">
-          <Button className="bg-emerald-600 hover:bg-emerald-700 text-white">New Project</Button>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Skeleton className="h-80 rounded-xl bg-zinc-900" />
+          <Skeleton className="h-80 rounded-xl bg-zinc-900" />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-8 max-w-7xl mx-auto space-y-8">
+      
+      {/* 1. HEADER */}
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold text-zinc-100">Dashboard</h1>
+          <p className="text-zinc-400">Resumen de seguridad de tu organización.</p>
+        </div>
+        <Link href="/dashboard/projects">
+            <Button className="bg-emerald-600 hover:bg-emerald-700 text-white">
+                Ver Proyectos
+            </Button>
         </Link>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {kpiData.map((kpi) => (
-          <Card key={kpi.title} className="bg-zinc-900 border-zinc-800">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-zinc-400">{kpi.title}</CardTitle>
-              <div className={`h-8 w-8 rounded-lg ${kpi.bgColor} flex items-center justify-center`}>
-                <kpi.icon className={`h-4 w-4 ${kpi.color}`} />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-zinc-100">{kpi.value}</div>
-              <p className="text-xs text-zinc-500 mt-1 flex items-center gap-1">
-                <TrendingUp className="h-3 w-3" />
-                {kpi.change}
-              </p>
-            </CardContent>
-          </Card>
-        ))}
+      {/* 2. TARJETAS DE RESUMEN (KPIs) */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card className="bg-zinc-900 border-zinc-800">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-zinc-400">Proyectos Activos</CardTitle>
+            <FolderKanban className="h-4 w-4 text-emerald-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-zinc-100">{stats.totalProjects}</div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-zinc-900 border-zinc-800">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-zinc-400">Total Hallazgos</CardTitle>
+            <FileText className="h-4 w-4 text-blue-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-zinc-100">{stats.totalVulns}</div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-zinc-900 border-zinc-800">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-zinc-400">Vulnerabilidades Abiertas</CardTitle>
+            <AlertTriangle className="h-4 w-4 text-red-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-400">{stats.openVulns}</div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-zinc-900 border-zinc-800">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-zinc-400">Mitigadas / Cerradas</CardTitle>
+            <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-emerald-400">{stats.fixedVulns}</div>
+          </CardContent>
+        </Card>
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-6">
-        {/* Recent Activity */}
-        <Card className="bg-zinc-900 border-zinc-800 lg:col-span-1">
+      {/* 3. GRÁFICOS */}
+      <div className="grid gap-6 md:grid-cols-2">
+        
+        {/* Distribución por Severidad (Bar Chart) */}
+        <Card className="bg-zinc-900 border-zinc-800">
           <CardHeader>
-            <CardTitle className="text-zinc-100">Recent Activity</CardTitle>
-            <CardDescription className="text-zinc-500">Latest updates from your team</CardDescription>
+            <CardTitle className="text-zinc-100">Severidad de Hallazgos</CardTitle>
+            <CardDescription>Distribución de vulnerabilidades por riesgo.</CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {recentActivity.map((activity, index) => (
-                <div key={index} className="flex gap-3">
-                  <Avatar className="h-8 w-8">
-                    <AvatarImage src={`/.jpg?height=32&width=32&query=${activity.user} avatar`} />
-                    <AvatarFallback className="bg-zinc-700 text-zinc-300 text-xs">{activity.avatar}</AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-zinc-300">
-                      <span className="font-medium text-zinc-100">{activity.user}</span> {activity.action}{" "}
-                      {activity.target && <span className="font-medium text-zinc-100">{activity.target}</span>} in{" "}
-                      <span className="text-emerald-400">{activity.project}</span>
-                    </p>
-                    <p className="text-xs text-zinc-500 flex items-center gap-1 mt-1">
-                      <Clock className="h-3 w-3" />
-                      {activity.time}
-                    </p>
-                  </div>
+          <CardContent className="h-[300px]">
+            {stats.totalVulns > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={stats.severityDistribution}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
+                    <XAxis dataKey="name" stroke="#71717a" fontSize={12} />
+                    <YAxis stroke="#71717a" fontSize={12} />
+                    <RechartsTooltip 
+                        contentStyle={{ backgroundColor: '#18181b', borderColor: '#27272a', color: '#fff' }}
+                        itemStyle={{ color: '#fff' }}
+                    />
+                    <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                        {stats.severityDistribution.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.fill} />
+                        ))}
+                    </Bar>
+                </BarChart>
+                </ResponsiveContainer>
+            ) : (
+                <div className="h-full flex items-center justify-center text-zinc-500 text-sm">
+                    No hay datos suficientes
                 </div>
-              ))}
-            </div>
+            )}
           </CardContent>
         </Card>
 
-        {/* Active Projects Table */}
-        <Card className="bg-zinc-900 border-zinc-800 lg:col-span-2">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle className="text-zinc-100">Active Projects</CardTitle>
-              <CardDescription className="text-zinc-500">Your ongoing security assessments</CardDescription>
-            </div>
-            <Link href="/dashboard/projects">
-              <Button variant="ghost" className="text-zinc-400 hover:text-zinc-100">
-                View all
-                <ArrowRight className="h-4 w-4 ml-1" />
-              </Button>
-            </Link>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-zinc-800">
-                    <th className="text-left py-3 px-2 text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                      Project
-                    </th>
-                    <th className="text-left py-3 px-2 text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                      Client
-                    </th>
-                    <th className="text-left py-3 px-2 text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="text-left py-3 px-2 text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                      Progress
-                    </th>
-                    <th className="text-left py-3 px-2 text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                      Due Date
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-800">
-                  {activeProjects.map((project) => (
-                    <tr key={project.id} className="hover:bg-zinc-800/50 transition-colors">
-                      <td className="py-3 px-2">
-                        <Link
-                          href={`/dashboard/projects/${project.id}`}
-                          className="text-sm font-medium text-zinc-100 hover:text-emerald-400 transition-colors"
-                        >
-                          {project.name}
-                        </Link>
-                      </td>
-                      <td className="py-3 px-2 text-sm text-zinc-400">{project.client}</td>
-                      <td className="py-3 px-2">
-                        <Badge variant="outline" className={getStatusColor(project.status)}>
-                          {project.status}
-                        </Badge>
-                      </td>
-                      <td className="py-3 px-2">
-                        <div className="flex items-center gap-2">
-                          <Progress value={project.progress} className="h-2 w-20 bg-zinc-800" />
-                          <span className="text-xs text-zinc-500">{project.progress}%</span>
-                        </div>
-                      </td>
-                      <td className="py-3 px-2 text-sm text-zinc-400">{project.dueDate}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
+        {/* Estado de Hallazgos (Pie Chart) */}
+        <Card className="bg-zinc-900 border-zinc-800">
+            <CardHeader>
+                <CardTitle className="text-zinc-100">Estado Actual</CardTitle>
+                <CardDescription>Proporción de hallazgos abiertos vs cerrados.</CardDescription>
+            </CardHeader>
+            <CardContent className="h-[300px]">
+                {stats.totalVulns > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                            <Pie
+                                data={stats.statusDistribution}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={60}
+                                outerRadius={80}
+                                paddingAngle={5}
+                                dataKey="value"
+                            >
+                                {stats.statusDistribution.map((entry, index) => (
+                                    <Cell key={`cell-${index}`} fill={entry.fill} />
+                                ))}
+                            </Pie>
+                            <RechartsTooltip contentStyle={{ backgroundColor: '#18181b', borderColor: '#27272a', color: '#fff' }} />
+                            <Legend />
+                        </PieChart>
+                    </ResponsiveContainer>
+                ) : (
+                    <div className="h-full flex items-center justify-center text-zinc-500 text-sm">
+                        No hay datos suficientes
+                    </div>
+                )}
+            </CardContent>
         </Card>
       </div>
+
+      {/* 4. ACTIVIDAD RECIENTE */}
+      <Card className="bg-zinc-900 border-zinc-800 col-span-2">
+        <CardHeader>
+          <CardTitle className="text-zinc-100 flex items-center gap-2">
+            <Activity className="h-5 w-5 text-emerald-500" /> Actividad Reciente
+          </CardTitle>
+          <CardDescription>Últimos hallazgos reportados en tus proyectos.</CardDescription>
+        </CardHeader>
+        <CardContent>
+            <div className="space-y-4">
+                {stats.recentFindings.length === 0 ? (
+                    <div className="text-center py-8 text-zinc-500">Sin actividad reciente.</div>
+                ) : (
+                    stats.recentFindings.map((finding) => (
+                        <div key={finding._id} className="flex items-center justify-between p-4 rounded-lg bg-zinc-950/50 border border-zinc-800/50">
+                            <div className="flex items-center gap-4">
+                                <ShieldAlert className={`h-8 w-8 ${
+                                    finding.severity === 'critical' ? 'text-red-500' :
+                                    finding.severity === 'high' ? 'text-orange-500' :
+                                    finding.severity === 'medium' ? 'text-yellow-500' :
+                                    'text-blue-500'
+                                }`} />
+                                <div>
+                                    <p className="font-medium text-zinc-200">{finding.title}</p>
+                                    <p className="text-xs text-zinc-500">
+                                        En <span className="text-zinc-400">{finding.project}</span> • {new Date(finding.date).toLocaleDateString()}
+                                    </p>
+                                </div>
+                            </div>
+                            <Link href={`/dashboard/projects/${finding._id}`} className="text-sm text-emerald-500 hover:text-emerald-400 flex items-center gap-1">
+                                Ver <ArrowRight className="h-3 w-3" />
+                            </Link>
+                        </div>
+                    ))
+                )}
+            </div>
+        </CardContent>
+      </Card>
     </div>
-  )
+  );
 }
