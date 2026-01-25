@@ -23,17 +23,13 @@ export default function ProjectPage() {
   const { organization, isLoaded } = useOrganization();
   const orgId = organization?.id;
 
-  // QUERIES PRINCIPALES
   const project = useQuery(api.projects.getProject, { id: projectId });
   const findings = useQuery(api.vulnerabilities.getFindings, { projectId });
   
-  // --- NUEVAS QUERIES PARA BRANDING ---
+  // --- QUERIES PARA EL REPORTE PDF ---
   const settings = useQuery(api.settings.getSettings, orgId ? { orgId } : "skip");
   const sub = useQuery(api.subscriptions.getMySubscription, orgId ? { orgId } : "skip");
-  
-  // Determinamos si es Pro
   const isPro = sub?.plan === "pro" || sub?.plan === "enterprise";
-  // ------------------------------------
 
   const createFinding = useMutation(api.vulnerabilities.createFinding);
 
@@ -54,27 +50,24 @@ export default function ProjectPage() {
   }
 
   const handleCreate = async () => {
-      // Limpiamos la selección para crear uno nuevo
+      // 1. VALIDACIÓN DE SEGURIDAD (Frontend)
+      if (!orgId) {
+        toast.error("Error: Organización no detectada.");
+        return;
+      }
+
       setSelectedVuln(null);
-      
-      // Creamos un borrador en la DB para obtener ID (opcional, o abrimos drawer vacío)
-      // En este caso, tu Drawer maneja la creación si le pasas null? 
-      // Releyendo tu Drawer, parece que necesita un vulnerability existente para editar, 
-      // o maneja la creación internamente?
-      // Miremos tu Drawer anterior: usa 'updateFinding'. 
-      // Para crear, necesitamos llamar a createFinding primero.
       
       try {
           const newId = await createFinding({
               projectId,
+              orgId, // <--- CORRECCIÓN CRÍTICA AQUÍ
               title: "Nueva Vulnerabilidad",
               description: "",
               severity: "low",
               status: "open",
           });
           
-          // Buscamos el objeto completo en la lista actualizada (puede tardar unos ms en reflejarse)
-          // Truco: Pasamos un objeto temporal con el ID
           setSelectedVuln({ 
               _id: newId, 
               title: "Nueva Vulnerabilidad", 
@@ -85,7 +78,8 @@ export default function ProjectPage() {
           });
           setIsDrawerOpen(true);
       } catch (error) {
-          toast.error("Error al crear hallazgo");
+          console.error(error);
+          toast.error("Error al crear hallazgo. Verifica tu conexión o plan.");
       }
   };
 
@@ -114,19 +108,18 @@ export default function ProjectPage() {
         </div>
         
         <div className="flex gap-2">
-            {/* BOTÓN EXPORTAR PDF */}
             <PDFDownloadLink
                 document={
                     <PdfReport 
                         project={project} 
                         vulnerabilities={findings} 
-                        settings={settings} // <--- Pasamos configuración
-                        isPro={isPro}       // <--- Pasamos estado Pro
+                        settings={settings}
+                        isPro={isPro}
                     />
                 }
                 fileName={`report-${project.name}.pdf`}
             >
-                {/* @ts-ignore - ReactPDF types issue */}
+                {/* @ts-ignore */}
                 {({ loading }) => (
                     <Button variant="outline" className="border-zinc-700 text-zinc-300 hover:text-white gap-2" disabled={loading}>
                         {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
