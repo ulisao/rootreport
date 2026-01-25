@@ -128,4 +128,62 @@ export default function ProjectPage() {
             >
                 {/* @ts-ignore - ReactPDF types issue */}
                 {({ loading }) => (
-                    <Button variant="outline" className="border-zinc-700 text-zinc-300 hover:text-white gap-2" disabled
+                    <Button variant="outline" className="border-zinc-700 text-zinc-300 hover:text-white gap-2" disabled={loading}>
+                        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                        Exportar PDF
+                    </Button>
+                )}
+            </PDFDownloadLink>
+
+            <Button onClick={handleCreate} className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2">
+                <Plus className="h-4 w-4" /> Nuevo Hallazgo
+            </Button>
+        </div>
+      </div>
+
+      {/* GRID DE VULNERABILIDADES */}
+      <div className="grid grid-cols-1 gap-4">
+         {findings.length === 0 ? (
+             <div className="text-center py-12 border-2 border-dashed border-zinc-800 rounded-lg text-zinc-500">
+                 No hay vulnerabilidades reportadas aún.
+             </div>
+         ) : (
+             findings.map((vuln) => (
+                 <Card 
+                    key={vuln._id} 
+                    className="bg-zinc-900 border-zinc-800 hover:border-zinc-700 transition-colors cursor-pointer group"
+                    onClick={() => openFinding(vuln)}
+                 >
+                    <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
+                        <div className="space-y-1">
+                            <CardTitle className="text-lg font-medium text-zinc-200 group-hover:text-emerald-400 transition-colors">
+                                {vuln.title}
+                            </CardTitle>
+                            <CardDescription className="line-clamp-1">
+                                {vuln.description || "Sin descripción..."}
+                            </CardDescription>
+                        </div>
+                        <Badge variant="outline" className={`capitalize ${getSeverityColor(vuln.severity)}`}>
+                            {vuln.severity}
+                        </Badge>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="flex gap-4 text-xs text-zinc-500 mt-2">
+                            <span>Estado: <span className="text-zinc-300 capitalize">{vuln.status.replace("_", " ")}</span></span>
+                            {vuln.cvssScore ? <span>CVSS: <span className="text-zinc-300">{vuln.cvssScore}</span></span> : null}
+                            <span>Imágenes: {vuln.images?.length || 0}</span>
+                        </div>
+                    </CardContent>
+                 </Card>
+             ))
+         )}
+      </div>
+
+      <VulnerabilityDrawer 
+        open={isDrawerOpen} 
+        onOpenChange={setIsDrawerOpen} 
+        vulnerability={selectedVuln} 
+      />
+    </div>
+  );
+}
